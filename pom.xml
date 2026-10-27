@@ -1,0 +1,307 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>org.pih.openmrs</groupId>
+    <artifactId>kazakhstan-emr</artifactId>
+    <name>PIH Kazakhstan EMR</name>
+    <description>The Kazakhstan EMR (Bahmni 0.89) as a Docker image</description>
+    <url>https://github.com/PIH/kazakhstan-emr</url>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <organization>
+        <name>Partners In Health</name>
+        <url>http://pih.org</url>
+    </organization>
+
+    <developers>
+        <developer>
+            <name>Partners In Health</name>
+        </developer>
+    </developers>
+
+    <licenses>
+        <license>
+            <name>Mozilla Public License 2.0 with Healthcare Disclaimer</name>
+            <url>http://openmrs.org/license</url>
+        </license>
+    </licenses>
+
+    <scm>
+        <connection>scm:git:https://github.com/PIH/kazakhstan-emr.git</connection>
+        <developerConnection>scm:git:https://github.com/PIH/kazakhstan-emr.git</developerConnection>
+        <url>https://github.com/PIH/kazakhstan-emr</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <sdkVersion>6.9.0-SNAPSHOT</sdkVersion>
+        <!-- The SDK's distro directory; web/ is the Docker build context -->
+        <distro.dir>${project.build.directory}/distro</distro.dir>
+        <docker.context>${distro.dir}/web</docker.context>
+        <docker.image.name>kazakhstan-emr</docker.image.name>
+        <docker.image.tag>${project.version}</docker.image.tag>
+        <!-- -Ddocker.skip builds the context without building the image -->
+        <docker.skip>false</docker.skip>
+
+        <!-- Bahmni 0.89's packages, the versions the server has installed -->
+        <bahmniRpmRepo>https://repo.mybahmni.org/releases</bahmniRpmRepo>
+        <!-- endTB's frontend build (endtb/openmrs-module-bahmniapps release 2.3.3; build 46, revision 7ab31a2) -->
+        <bahmniappsUrl>https://github.com/endtb/openmrs-module-bahmniapps/releases/download/2.3.3/endtb-bahmniapps-0.89-46.zip</bahmniappsUrl>
+        <bahmniBatchVersion>2.4.2</bahmniBatchVersion>
+        <!-- Java 8 (the server ran Oracle's 8u131) -->
+        <jreUrl>https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u504-b01/OpenJDK8U-jre_x64_linux_hotspot_8u504b01.tar.gz</jreUrl>
+    </properties>
+
+    <build>
+        <plugins>
+            <!-- A new build context every build, so nothing removed from the sources stays in the image -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-clean-plugin</artifactId>
+                <version>3.4.0</version>
+                <executions>
+                    <execution>
+                        <id>clean-distro</id>
+                        <phase>initialize</phase>
+                        <goals>
+                            <goal>clean</goal>
+                        </goals>
+                        <configuration>
+                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
+                            <filesets>
+                                <fileset>
+                                    <directory>${distro.dir}</directory>
+                                </fileset>
+                            </filesets>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.3.1</version>
+                <executions>
+                    <!-- openmrs-distro.properties, with the name and version filled in -->
+                    <execution>
+                        <id>distro-properties</id>
+                        <phase>process-resources</phase>
+                        <goals><goal>copy-resources</goal></goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/classes</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${project.basedir}</directory>
+                                    <filtering>true</filtering>
+                                    <includes><include>openmrs-distro.properties</include></includes>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                    <!-- After build-distro: docker/ (the Dockerfile, replacing the SDK's, and the server's own files)
+                         and config/ -->
+                    <execution>
+                        <id>docker</id>
+                        <phase>package</phase>
+                        <goals><goal>copy-resources</goal></goals>
+                        <configuration>
+                            <outputDirectory>${docker.context}</outputDirectory>
+                            <overwrite>true</overwrite>
+                            <resources><resource><directory>${project.basedir}/docker</directory></resource></resources>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>config</id>
+                        <phase>package</phase>
+                        <goals><goal>copy-resources</goal></goals>
+                        <configuration>
+                            <outputDirectory>${docker.context}/config</outputDirectory>
+                            <resources><resource><directory>${project.basedir}/config</directory></resource></resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- The OpenMRS war and the omods in openmrs-distro.properties, into web/openmrs_core and web/openmrs_modules -->
+            <plugin>
+                <groupId>org.openmrs.maven.plugins</groupId>
+                <artifactId>openmrs-sdk-maven-plugin</artifactId>
+                <version>${sdkVersion}</version>
+                <executions>
+                    <execution>
+                        <id>build-distro</id>
+                        <phase>prepare-package</phase>
+                        <goals><goal>build-distro</goal></goals>
+                        <configuration>
+                            <distro>${project.build.directory}/classes/openmrs-distro.properties</distro>
+                            <dir>${distro.dir}</dir>
+                            <skipDockerCompose>true</skipDockerCompose>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Bahmni's packages, the endTB module, endTB's frontend and batch exports, and the JRE, checked against their SHA-256 -->
+            <plugin>
+                <groupId>com.googlecode.maven-download-plugin</groupId>
+                <artifactId>download-maven-plugin</artifactId>
+                <version>1.13.0</version>
+                <configuration>
+                    <outputDirectory>${docker.context}/downloads</outputDirectory>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>bahmni-openmrs</id>
+                        <phase>package</phase>
+                        <goals><goal>wget</goal></goals>
+                        <configuration>
+                            <uri>${bahmniRpmRepo}/bahmni-openmrs-0.89-89.noarch.rpm</uri>
+                            <sha256>b8d7bfe72b592113ea190eaa79f32e521a683081287b5e7b1ef5050dfea76e75</sha256>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>bahmni-emr</id>
+                        <phase>package</phase>
+                        <goals><goal>wget</goal></goals>
+                        <configuration>
+                            <uri>${bahmniRpmRepo}/bahmni-emr-0.89-326.noarch.rpm</uri>
+                            <sha256>b4086cbb6d607ab963e0d9b7bf0f7e67ebef264892e375e24b3d753911d1d25c</sha256>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>bahmni-web</id>
+                        <phase>package</phase>
+                        <goals><goal>wget</goal></goals>
+                        <configuration>
+                            <uri>${bahmniRpmRepo}/bahmni-web-0.89-326.noarch.rpm</uri>
+                            <sha256>4462344409b3d5bd0874ad308dcf1bdecbd32eb1247aecb07ba2db5d9ffe614f</sha256>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>bahmni-reports</id>
+                        <phase>package</phase>
+                        <goals><goal>wget</goal></goals>
+                        <configuration>
+                            <uri>${bahmniRpmRepo}/bahmni-reports-0.89-64.noarch.rpm</uri>
+                            <sha256>936ba83c05f5814834c9f866ab71c58dc60bdf5fecce4b35292406b51b07cde5</sha256>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>bahmni-implementer-interface</id>
+                        <phase>package</phase>
+                        <goals><goal>wget</goal></goals>
+                        <configuration>
+                            <uri>${bahmniRpmRepo}/bahmni-implementer-interface-0.89-97.noarch.rpm</uri>
+                            <sha256>dbd2a383af89fc5acd7c750cc1973b72fdfab1995d2354d34cf63c901559acb6</sha256>
+                        </configuration>
+                    </execution>
+                    <!-- The endTB module. Not in openmrs-distro.properties: its published pom names an unresolved parent
+                         version (${bahmniEndTbVersion}), so neither the SDK nor Maven can resolve it -->
+                    <execution>
+                        <id>bahmniendtb</id>
+                        <phase>package</phase>
+                        <goals><goal>wget</goal></goals>
+                        <configuration>
+                            <uri>https://openmrs.jfrog.io/artifactory/public/org/bahmni/module/bahmniendtb-omod/2.3.3/bahmniendtb-omod-2.3.3.jar</uri>
+                            <outputDirectory>${docker.context}/openmrs_modules</outputDirectory>
+                            <outputFileName>bahmniendtb-2.3.3.omod</outputFileName>
+                            <sha256>9d45f51752838bcd1567aed753fa533efbfd8808fb3d5a2528c88e340bf38c2f</sha256>
+                        </configuration>
+                    </execution>
+                    <!-- Not installed: the server's maintenance page is from its Ansible playbooks -->
+                    <execution>
+                        <id>bahmni-installer</id>
+                        <phase>package</phase>
+                        <goals><goal>wget</goal></goals>
+                        <configuration>
+                            <uri>${bahmniRpmRepo}/bahmni-installer-0.89-193.noarch.rpm</uri>
+                            <outputDirectory>${docker.context}/downloads/installer</outputDirectory>
+                            <sha256>d50ac4a297910e92237d40748c80ab9a352d2bedd2dbb547f3517b466c09079f</sha256>
+                        </configuration>
+                    </execution>
+                    <!-- endTB's batch exports (endtb/bahmni-endtb-batch), the build the server runs -->
+                    <execution>
+                        <id>bahmni-batch</id>
+                        <phase>package</phase>
+                        <goals><goal>wget</goal></goals>
+                        <configuration>
+                            <uri>https://github.com/endtb/bahmni-endtb-batch/releases/download/${bahmniBatchVersion}/bahmni-batch-${bahmniBatchVersion}.jar</uri>
+                            <sha256>360df0e7a53e7f64c2926cf2a0186b57777a3d9997ef24a941f70408adb04257</sha256>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>bahmniapps</id>
+                        <phase>package</phase>
+                        <goals><goal>wget</goal></goals>
+                        <configuration>
+                            <uri>${bahmniappsUrl}</uri>
+                            <outputFileName>bahmniapps.zip</outputFileName>
+                            <sha256>633059dfb52e0fe88f297d66f7df35bc2f79a1e33be097b27c4e4d5d1931a8f7</sha256>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>jre</id>
+                        <phase>package</phase>
+                        <goals><goal>wget</goal></goals>
+                        <configuration>
+                            <uri>${jreUrl}</uri>
+                            <outputFileName>jre.tar.gz</outputFileName>
+                            <sha256>52dcd578baca1d3e449ea86768a9129c0ee04d7b22565695498353cc66940c61</sha256>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>docker-build</id>
+                        <phase>package</phase>
+                        <goals><goal>exec</goal></goals>
+                        <configuration>
+                            <skip>${docker.skip}</skip>
+                            <executable>docker</executable>
+                            <arguments>
+                                <argument>build</argument>
+                                <argument>--tag</argument>
+                                <argument>${docker.image.name}:${docker.image.tag}</argument>
+                                <argument>${docker.context}</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <repositories>
+        <repository>
+            <id>openmrs-repo</id>
+            <name>OpenMRS Nexus Repository</name>
+            <url>https://openmrs.jfrog.io/artifactory/public</url>
+        </repository>
+    </repositories>
+
+    <pluginRepositories>
+        <pluginRepository>
+            <id>openmrs-repo</id>
+            <name>OpenMRS Nexus Repository</name>
+            <url>https://openmrs.jfrog.io/artifactory/public</url>
+        </pluginRepository>
+        <!-- The SDK's SNAPSHOT, as in PIH's other distributions -->
+        <pluginRepository>
+            <id>openmrs-repo-snapshots</id>
+            <name>OpenMRS Snapshots Repo</name>
+            <url>https://openmrs.jfrog.io/artifactory/snapshots</url>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </pluginRepository>
+    </pluginRepositories>
+
+</project>

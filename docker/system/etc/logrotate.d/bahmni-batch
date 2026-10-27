@@ -1,0 +1,9 @@
+# The batch exports' log: its wrapper script appends to it (>>), so it's copied and truncated in place
+/opt/bahmni-batch/log/bahmni-batch.log {
+    size 10M
+    rotate 5
+    copytruncate
+    missingok
+    notifempty
+    compress
+}

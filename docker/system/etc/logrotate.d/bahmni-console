@@ -1,0 +1,10 @@
+# OpenMRS's and the reports' console output (stdout and stderr): start.sh appends to it (>>), so it's copied and
+# truncated in place. Their log4j logs rotate themselves.
+/opt/openmrs/log/openmrs-console.log /opt/bahmni-reports/log/bahmni-reports-console.log {
+    size 10M
+    rotate 5
+    copytruncate
+    missingok
+    notifempty
+    compress
+}

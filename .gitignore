@@ -1,0 +1,8 @@
+# DB dumps (patient data)
+/*.sql
+*.sql.gz
+e2e/node_modules/
+e2e/test-results/
+e2e/playwright-report/
+e2e/.patient-*.json
+target/
