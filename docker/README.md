@@ -78,15 +78,52 @@ The database: the server's `openmrs` dump, without its `DEFINER` clauses (the du
 
 ```bash
 openmrs-utils strip-mysqldump-definers --path=db-openmrs.sql.gz --output=db-openmrs.nodefiners.sql.gz
-RESTORE_MYSQL_DUMP_PATH=db-openmrs.nodefiners.sql.gz openmrs-docker <instance> initialize
 ```
 
-Documents and the rest of `/home/bahmni`: restore it into the `openmrs-data` volume as `bahmni/`
-(`RESTORE_OPENMRS_DATA_PATH`). The server's `/home/bahmni/.OpenMRS/openmrs-runtime.properties` holds its
-credentials; the entrypoint replaces it with a link to the image's.
+`/home/bahmni` (documents, patient images, uploads, report outputs, exports) goes into the
+`openmrs-data` volume as `bahmni/`. On the server, archive it inside an `openmrs-data/` folder
+(`initialize` restores the contents of an archive's single top-level folder), without `backups/`
+(the server's own database backups):
+
+```bash
+tar -czf /tmp/openmrs-data.tar.gz -C /home --exclude=bahmni/backups \
+  --transform='s,^bahmni,openmrs-data/bahmni,S' bahmni
+```
+
+(`--transform` puts it under `openmrs-data/`, not the links inside it, which stay as they are; the
+server's tar is 1.23.) Then both volumes in one go:
+
+```bash
+RESTORE_MYSQL_DUMP_PATH=db-openmrs.nodefiners.sql.gz \
+  RESTORE_OPENMRS_DATA_PATH=openmrs-data.tar.gz openmrs-docker <instance> initialize
+```
+
+The server's `/home/bahmni/.OpenMRS/openmrs-runtime.properties` holds its credentials; the entrypoint
+replaces it with a link to the image's.
 
 Nothing else: OpenMRS's application data directory on the server (`/opt/openmrs`) held no data apart from its
 search index (no `complex_obs` or `hl7_archives`), which OpenMRS rebuilds on the first start.
+
+## Backing up an instance
+
+`openmrs-utils backup-openmrs-data-directory`, leaving out the links the entrypoint puts in
+`/openmrs/data` to the image's config (it refuses links pointing outside the volume, and recreates
+these on every start), with the instance stopped:
+
+```bash
+openmrs-docker <instance> stop
+openmrs-utils backup-openmrs-data-directory --volume=<instance>_openmrs-data \
+  --output=openmrs-data.tar.gz --exclude-distribution-artifacts \
+  --exclude=bahmni_config --exclude=bahmnicore.properties \
+  --exclude=obscalculator --exclude=ordertemplates --exclude=encounterModifier \
+  --exclude=patientMatchingAlgorithm --exclude=elisFeedInterceptor \
+  --exclude=bahmni/.OpenMRS/openmrs-runtime.properties \
+  --exclude=bahmni/.OpenMRS/bahmnicore.properties --exclude=bahmni/.OpenMRS/modules \
+  --exclude=bahmni/.bahmni-reports/bahmni-reports.properties
+openmrs-docker <instance> start
+```
+
+It restores like the server's archive (`RESTORE_OPENMRS_DATA_PATH`).
 
 ## Local copies
 
