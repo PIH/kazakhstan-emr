@@ -32,6 +32,10 @@ case "${OMRS_APACHE_ACCESS_LOG:-false}" in
   true|false) ;;
   *) echo "ERROR: OMRS_APACHE_ACCESS_LOG must be true or false" >&2; exit 1 ;;
 esac
+# The batch exports (their jar's own config) and prune-exports name the database openmrs
+if [ "$OMRS_CONFIG_CONNECTION_DATABASE" != openmrs ]; then
+  echo "ERROR: OMRS_CONFIG_CONNECTION_DATABASE must be openmrs" >&2; exit 1
+fi
 # docker stop: Apache and cron stopped, and the Java services sent SIGTERM (their init scripts' stop is kill -9;
 # Bahmni's launcher has no shutdown hook, so they exit at once), within Docker's 10 seconds
 running() { for p in "$@"; do kill -0 "$p" 2>/dev/null && return 0; done; return 1; }
