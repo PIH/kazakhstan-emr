@@ -121,7 +121,17 @@ ln -sfn /opt/openmrs/modules /home/bahmni/.OpenMRS/modules
 ln -sfn /opt/bahmni-reports/etc/bahmni-reports.properties /home/bahmni/.bahmni-reports/bahmni-reports.properties
 # Apache serves documents, images and uploads from here
 chmod 755 /openmrs/data /openmrs/data/bahmni
-find /openmrs/data ! -user bahmni -exec chown -h bahmni:bahmni {} +
+# Everything to bahmni once (a new volume, or a restored one: initialize gives its files to root, this marker
+# included), then only what the lines above make, not years of documents on every start
+marker=/openmrs/data/.ownership-set
+if [ "$(stat -c %U $marker 2>/dev/null)" != bahmni ]; then
+  echo "Giving /openmrs/data to bahmni"
+  find /openmrs/data ! -user bahmni -exec chown -h bahmni:bahmni {} +
+  touch $marker && chown bahmni:bahmni $marker
+else
+  find /openmrs/data -maxdepth 1 ! -user bahmni -exec chown -h bahmni:bahmni {} +
+  find /openmrs/data/bahmni -maxdepth 2 ! -user bahmni -exec chown -h bahmni:bahmni {} +
+fi
 
 # --- The database
 export MYSQL_PWD=$DB_PASSWORD
