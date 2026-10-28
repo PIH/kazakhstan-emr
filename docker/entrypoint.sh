@@ -55,13 +55,16 @@ export REPORTS_DB_USER=${OMRS_REPORTS_DB_USER:-reports-user} REPORTS_DB_PASSWORD
 export REPORTS_OPENMRS_USER=${OMRS_REPORTS_OPENMRS_USER:-reports-user}
 export REPORTS_OPENMRS_PASSWORD=$OMRS_REPORTS_OPENMRS_PASSWORD
 
-# --- Credentials and settings into the config files (values via env, so nothing needs escaping)
-setprop() { # <file> <key> <value>: key=value lines (Java properties and shell-sourced files alike)
+# --- Credentials and settings into the config files (values via env, so perl needs no escaping)
+setline() { # <file> <key> <value>: replaces a key=value line's value with <value> as it is
   K=$2 V=$3 perl -i -pe 's/^(\s*(?:export\s+)?\Q$ENV{K}\E\s*=).*/$1$ENV{V}/' "$1"
   grep -qE "^\s*(export\s+)?$(printf '%s' "$2" | sed 's/\./\\./g')\s*=" "$1" || { echo "ERROR: no $2 in $1" >&2; exit 1; }
 }
+setprop() { # <file> <key> <value>: a Java properties line, where \ is an escape
+  setline "$1" "$2" "${3//\\/\\\\}"
+}
 setsh() { # <file> <var> <value>: a shell-sourced VAR=value line, quoted for the shell
-  setprop "$1" "$2" "$(printf '%q' "$3")"
+  setline "$1" "$2" "$(printf '%q' "$3")"
 }
 jdbc() { echo "jdbc:mysql://$DB_HOST:3306/$1"; }
 
