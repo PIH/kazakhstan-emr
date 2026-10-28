@@ -194,7 +194,8 @@ test('ordering a TB drug shows it on the Drug-O-Gram', async ({ page, request })
     await page.locator('#uniform-dose-unit').selectOption({ label: 'mg' });
     await page.locator('#frequency').selectOption({ label: '7 days per week' });
     await page.locator('#route').selectOption({ label: 'Oral (PO)' });
-    await page.locator('#start-date').fill(new Date().toISOString().slice(0, 10));
+    // Today in the browser's time zone, as the form takes it (toISOString would be UTC's date)
+    await page.locator('#start-date').fill(new Date().toLocaleDateString('en-CA'));
     await page.getByRole('button', { name: 'Add', exact: true }).click();
     await save(page);
   }

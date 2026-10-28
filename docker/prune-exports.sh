@@ -1,13 +1,13 @@
 #!/bin/bash
 # Trims the endTB exports (bahmni-batch), keeping for each job the last export of each month, for the newest
-# 19 months: the zips in /home/bahmni/endtb_export, and the job's run history in the database, which the
-# Exports page (report.html) lists. Runs before each export (see the crontab): with the run it adds, each job
-# has at most 20, all the page shows, so the page lists exactly the zips there are.
-# Runs whose zip isn't kept (or that wrote none: failed, or stopped part way) go from the history too, apart
-# from one still running.
+# 18 months: the zips in /home/bahmni/endtb_export, and the job's run history in the database, which the
+# Exports page (report.html) lists. Runs whose zip isn't kept (or that wrote none: failed, or stopped part
+# way) go from the history too, apart from one still running and each job's newest run, so a failed export
+# stays on the page until the job next succeeds. Runs before each export (see the crontab): with that newest
+# run and the one it adds, each job has at most 20, all the page shows, so the page lists every kept zip.
 # Usage: prune-exports [dir]   (default /home/bahmni/endtb_export)
 set -u
-MONTHS=19
+MONTHS=18
 dir=${1:-/home/bahmni/endtb_export}
 cd "$dir" 2>/dev/null || exit 0
 
@@ -22,16 +22,22 @@ ls -1 | grep -E '[0-9]{12}\.zip$' | while IFS= read -r f; do
   grep -qxF -- "$f" <<< "$keep" || { rm -f -- "$f" && echo "Deleted export $f"; }
 done
 
-# The run history: every run apart from those of the kept zips, and one started in the last 12 hours
+# The run history: every run apart from those of the kept zips, one started in the last 12 hours, and each
+# job's newest
 . /etc/bahmni-installer/bahmni.conf
 keep_sql=$(sed "s/'/''/g; s/.*/('&')/" <<< "$keep" | paste -sd, -)
 MYSQL_PWD=$OPENMRS_DB_PASSWORD mysql -h "$OPENMRS_DB_SERVER" -u "$OPENMRS_DB_USERNAME" openmrs <<SQL
 CREATE TEMPORARY TABLE keep_zip (name VARCHAR(255) PRIMARY KEY);
 ${keep_sql:+INSERT INTO keep_zip VALUES $keep_sql;}
+CREATE TEMPORARY TABLE newest_execution (id BIGINT PRIMARY KEY)
+  SELECT MAX(e.JOB_EXECUTION_ID) AS id
+  FROM BATCH_JOB_EXECUTION e JOIN BATCH_JOB_INSTANCE i ON i.JOB_INSTANCE_ID = e.JOB_INSTANCE_ID
+  GROUP BY i.JOB_NAME;
 CREATE TEMPORARY TABLE old_execution (id BIGINT PRIMARY KEY)
   SELECT e.JOB_EXECUTION_ID AS id
   FROM BATCH_JOB_EXECUTION e LEFT JOIN BATCH_JOB_EXECUTION_CONTEXT c ON c.JOB_EXECUTION_ID = e.JOB_EXECUTION_ID
-  WHERE NOT (e.STATUS = 'STARTED' AND e.CREATE_TIME > NOW() - INTERVAL 12 HOUR)
+  WHERE e.JOB_EXECUTION_ID NOT IN (SELECT id FROM newest_execution)
+    AND NOT (e.STATUS = 'STARTED' AND e.CREATE_TIME > NOW() - INTERVAL 12 HOUR)
     AND NOT (e.STATUS = 'COMPLETED' AND SUBSTRING_INDEX(SUBSTRING_INDEX(c.SHORT_CONTEXT, '"outputFileName","', -1), '"', 1)
              IN (SELECT name FROM keep_zip));
 DELETE sc FROM BATCH_STEP_EXECUTION_CONTEXT sc

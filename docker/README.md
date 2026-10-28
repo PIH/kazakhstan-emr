@@ -157,9 +157,10 @@ opens, to `bahmni_config/report.html`, a link to `endtb_export/report.html`; bot
 Run one by hand with `bahmni-batch [belongs_to_external_cohort=stemTB]` as user `bahmni`.
 
 The exports are trimmed before each one runs (`prune-exports.sh`, in the crontab): for each job, the last export
-of each month is kept for the newest 19 months, with the newest export always among them, and every other zip
-goes, with its run's history in the database. With the run that follows, each job has at most 20, the most the
-page lists, so the page and the zips match. On the server the zips accumulated until the disk filled.
+of each month is kept for the newest 18 months, with the newest export always among them, and every other zip
+goes, with its run's history in the database. Each job's newest run is kept too, so a failed export stays on
+the page until the job next succeeds. With the run that follows, each job has at most 20, the most the page
+lists, so the page lists every zip there is. On the server the zips accumulated until the disk filled.
 
 ## Not in the image
 

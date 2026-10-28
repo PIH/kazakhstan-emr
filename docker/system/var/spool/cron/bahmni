@@ -1,5 +1,5 @@
 # stem tb exports
 # Each export is preceded by prune-exports, which keeps the last export of each month (and its run
-# history, which the Exports page lists) for the newest 19 months
+# history, which the Exports page lists) for the newest 18 months, and each job's newest run
 30 02 * * * /usr/local/sbin/prune-exports >/dev/null 2>&1; /usr/bin/bahmni-batch belongs_to_external_cohort=stemTB >/dev/null 2>&1
 30 23 * * * /usr/local/sbin/prune-exports >/dev/null 2>&1; /usr/bin/bahmni-batch >/dev/null 2>&1

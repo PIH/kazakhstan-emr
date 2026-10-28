@@ -16,6 +16,8 @@
 #   OMRS_APACHE_ACCESS_LOG         true: Apache's access log in the container's log; default false
 #   TZ                             time zone
 set -u
+# UTF-8, as on the server (the reports' migrations run from here)
+export LANG=en_US.UTF-8
 
 need() { [ -n "${!1:-}" ] || { echo "ERROR: $1 is not set" >&2; exit 1; }; }
 for v in OMRS_CONFIG_CONNECTION_SERVER OMRS_CONFIG_CONNECTION_DATABASE OMRS_CONFIG_CONNECTION_USERNAME \
@@ -30,6 +32,10 @@ case "${OMRS_APACHE_ACCESS_LOG:-false}" in
   true|false) ;;
   *) echo "ERROR: OMRS_APACHE_ACCESS_LOG must be true or false" >&2; exit 1 ;;
 esac
+# The batch exports (their jar's own config) and prune-exports name the database openmrs
+if [ "$OMRS_CONFIG_CONNECTION_DATABASE" != openmrs ]; then
+  echo "ERROR: OMRS_CONFIG_CONNECTION_DATABASE must be openmrs" >&2; exit 1
+fi
 # docker stop: Apache and cron stopped, and the Java services sent SIGTERM (their init scripts' stop is kill -9;
 # Bahmni's launcher has no shutdown hook, so they exit at once), within Docker's 10 seconds
 running() { for p in "$@"; do kill -0 "$p" 2>/dev/null && return 0; done; return 1; }
@@ -53,13 +59,16 @@ export REPORTS_DB_USER=${OMRS_REPORTS_DB_USER:-reports-user} REPORTS_DB_PASSWORD
 export REPORTS_OPENMRS_USER=${OMRS_REPORTS_OPENMRS_USER:-reports-user}
 export REPORTS_OPENMRS_PASSWORD=$OMRS_REPORTS_OPENMRS_PASSWORD
 
-# --- Credentials and settings into the config files (values via env, so nothing needs escaping)
-setprop() { # <file> <key> <value>: key=value lines (Java properties and shell-sourced files alike)
+# --- Credentials and settings into the config files (values via env, so perl needs no escaping)
+setline() { # <file> <key> <value>: replaces a key=value line's value with <value> as it is
   K=$2 V=$3 perl -i -pe 's/^(\s*(?:export\s+)?\Q$ENV{K}\E\s*=).*/$1$ENV{V}/' "$1"
   grep -qE "^\s*(export\s+)?$(printf '%s' "$2" | sed 's/\./\\./g')\s*=" "$1" || { echo "ERROR: no $2 in $1" >&2; exit 1; }
 }
+setprop() { # <file> <key> <value>: a Java properties line, where \ is an escape
+  setline "$1" "$2" "${3//\\/\\\\}"
+}
 setsh() { # <file> <var> <value>: a shell-sourced VAR=value line, quoted for the shell
-  setprop "$1" "$2" "$(printf '%q' "$3")"
+  setline "$1" "$2" "$(printf '%q' "$3")"
 }
 jdbc() { echo "jdbc:mysql://$DB_HOST:3306/$1"; }
 
@@ -119,7 +128,17 @@ ln -sfn /opt/openmrs/modules /home/bahmni/.OpenMRS/modules
 ln -sfn /opt/bahmni-reports/etc/bahmni-reports.properties /home/bahmni/.bahmni-reports/bahmni-reports.properties
 # Apache serves documents, images and uploads from here
 chmod 755 /openmrs/data /openmrs/data/bahmni
-find /openmrs/data ! -user bahmni -exec chown -h bahmni:bahmni {} +
+# Everything to bahmni once (a new volume, or a restored one: initialize gives its files to root, this marker
+# included), then only what the lines above make, not years of documents on every start
+marker=/openmrs/data/.ownership-set
+if [ "$(stat -c %U $marker 2>/dev/null)" != bahmni ]; then
+  echo "Giving /openmrs/data to bahmni"
+  find /openmrs/data ! -user bahmni -exec chown -h bahmni:bahmni {} +
+  touch $marker && chown bahmni:bahmni $marker
+else
+  find /openmrs/data -maxdepth 1 ! -user bahmni -exec chown -h bahmni:bahmni {} +
+  find /openmrs/data/bahmni -maxdepth 2 ! -user bahmni -exec chown -h bahmni:bahmni {} +
+fi
 
 # --- The database
 export MYSQL_PWD=$DB_PASSWORD
