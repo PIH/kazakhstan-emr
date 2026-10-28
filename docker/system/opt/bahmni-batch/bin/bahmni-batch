@@ -1,6 +1,8 @@
 #!/bin/bash
 
 . /etc/bahmni-installer/bahmni.conf
+# UTF-8, as on the server (cron starts this without LANG)
+export LANG=en_US.UTF-8
 
 export JOB_NAME=""
 export EXTERNAL_COHORT_TYPES=""

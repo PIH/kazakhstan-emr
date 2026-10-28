@@ -16,6 +16,8 @@
 #   OMRS_APACHE_ACCESS_LOG         true: Apache's access log in the container's log; default false
 #   TZ                             time zone
 set -u
+# UTF-8, as on the server (the reports' migrations run from here)
+export LANG=en_US.UTF-8
 
 need() { [ -n "${!1:-}" ] || { echo "ERROR: $1 is not set" >&2; exit 1; }; }
 for v in OMRS_CONFIG_CONNECTION_SERVER OMRS_CONFIG_CONNECTION_DATABASE OMRS_CONFIG_CONNECTION_USERNAME \
