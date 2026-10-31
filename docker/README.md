@@ -24,7 +24,10 @@ OpenMRS and Bahmni reports run in the Tomcat built into Bahmni's launcher jars (
 ## How it fits an openmrs_docker instance
 
 The instance's `openmrs` service ([openmrs-contrib-distro-tools](https://github.com/PIH/openmrs-contrib-distro-tools)
-`docker/services/openmrs.yaml`) runs this image, and `openmrs-db` runs MySQL 5.6, its default.
+`services/openmrs/compose.yaml`) runs this image, and `openmrs-db` runs MySQL 5.6, its default.
+
+New to these tools? [Getting to know the tools](https://github.com/PIH/openmrs-contrib-distro-tools/blob/main/docs/getting-to-know-the-tools.md) walks through what
+`openmrs-docker` and `pihx` can do.
 
 | The service expects | The image |
 | --- | --- |
@@ -81,8 +84,8 @@ openmrs-utils strip-mysqldump-definers --path=db-openmrs.sql.gz --output=db-open
 ```
 
 `/home/bahmni` (documents, patient images, uploads, report outputs, exports) goes into the
-`openmrs-data` volume as `bahmni/`. On the server, archive it inside an `openmrs-data/` folder
-(`initialize` restores the contents of an archive's single top-level folder), without `backups/`
+`openmrs-data` volume as `bahmni/`. On the server, archive it inside an `openmrs-data/` directory
+(`initialize` restores the contents of an archive's single top-level directory), without `backups/`
 (the server's own database backups):
 
 ```bash
@@ -91,11 +94,14 @@ tar -czf /tmp/openmrs-data.tar.gz -C /home --exclude=bahmni/backups \
 ```
 
 (`--transform` puts it under `openmrs-data/`, not the links inside it, which stay as they are; the
-server's tar is 1.23.) Then both volumes in one go:
+server's tar is 1.23.) Then both volumes in one go, from a directory holding an entry per service (links
+work), named as `initialize` expects:
 
 ```bash
-RESTORE_MYSQL_DUMP_PATH=db-openmrs.nodefiners.sql.gz \
-  RESTORE_OPENMRS_DATA_PATH=openmrs-data.tar.gz openmrs-docker <instance> initialize
+mkdir restore
+ln -s "$PWD/db-openmrs.nodefiners.sql.gz" restore/openmrs-db.sql.gz
+ln -s "$PWD/openmrs-data.tar.gz" restore/openmrs.tar.gz
+openmrs-docker <instance> initialize --from restore
 ```
 
 The server's `/home/bahmni/.OpenMRS/openmrs-runtime.properties` holds its credentials; the entrypoint
@@ -123,7 +129,7 @@ openmrs-utils backup-openmrs-data-directory --volume=<instance>_openmrs-data \
 openmrs-docker <instance> start
 ```
 
-It restores like the server's archive (`RESTORE_OPENMRS_DATA_PATH`).
+It restores like the server's archive (an `openmrs.tar.gz` entry in the `initialize --from` directory).
 
 ## Local copies
 
