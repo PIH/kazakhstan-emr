@@ -26,6 +26,9 @@ OpenMRS and Bahmni reports run in the Tomcat built into Bahmni's launcher jars (
 The instance's `openmrs` service ([openmrs-contrib-distro-tools](https://github.com/PIH/openmrs-contrib-distro-tools)
 `services/openmrs/compose.yaml`) runs this image, and `openmrs-db` runs MySQL 5.6, its default.
 
+New to these tools? [Getting to know the tools](https://github.com/PIH/openmrs-contrib-distro-tools/blob/main/docs/getting-to-know-the-tools.md) walks through what
+`openmrs-docker` and `pihx` can do.
+
 | The service expects | The image |
 | --- | --- |
 | HTTP on 8080 | Apache on 8080: the server's site without TLS. `/bahmni`, `bahmni_config` and documents are served by it; `/openmrs` and `/bahmnireports` go to OpenMRS (8050) and Bahmni reports (8051) in the same container. The instance's proxy terminates TLS |
@@ -81,8 +84,8 @@ openmrs-utils strip-mysqldump-definers --path=db-openmrs.sql.gz --output=db-open
 ```
 
 `/home/bahmni` (documents, patient images, uploads, report outputs, exports) goes into the
-`openmrs-data` volume as `bahmni/`. On the server, archive it inside an `openmrs-data/` folder
-(`initialize` restores the contents of an archive's single top-level folder), without `backups/`
+`openmrs-data` volume as `bahmni/`. On the server, archive it inside an `openmrs-data/` directory
+(`initialize` restores the contents of an archive's single top-level directory), without `backups/`
 (the server's own database backups):
 
 ```bash
@@ -91,7 +94,7 @@ tar -czf /tmp/openmrs-data.tar.gz -C /home --exclude=bahmni/backups \
 ```
 
 (`--transform` puts it under `openmrs-data/`, not the links inside it, which stay as they are; the
-server's tar is 1.23.) Then both volumes in one go, from a folder holding an entry per service (links
+server's tar is 1.23.) Then both volumes in one go, from a directory holding an entry per service (links
 work), named as `initialize` expects:
 
 ```bash
@@ -126,7 +129,7 @@ openmrs-utils backup-openmrs-data-directory --volume=<instance>_openmrs-data \
 openmrs-docker <instance> start
 ```
 
-It restores like the server's archive (an `openmrs.tar.gz` entry in the `initialize --from` folder).
+It restores like the server's archive (an `openmrs.tar.gz` entry in the `initialize --from` directory).
 
 ## Local copies
 
